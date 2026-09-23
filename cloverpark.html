@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Clover Pit - WebGL Arcade Launcher</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts - JetBrains Mono & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #090a0f;
+      color: #e2e8f0;
+      overflow-x: hidden;
+    }
+    .font-mono-custom {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* CRT Scanline Overlay Effect */
+    .scanline-overlay {
+      background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%, 
+        rgba(0, 0, 0, 0.35) 50%
+      );
+      background-size: 100% 4px;
+      pointer-events: none;
+    }
+    /* Glow Aesthetics */
+    .neon-border {
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.25), inset 0 0 15px rgba(16, 185, 129, 0.1);
+    }
+    canvas:focus {
+      outline: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between items-center bg-slate-950 p-2 sm:p-4 select-none">
+
+  <header class="w-full max-w-5xl flex flex-wrap justify-between items-center gap-3 p-4 bg-slate-900/80 backdrop-blur border border-emerald-900/50 rounded-xl mb-3 shadow-lg">
+    <div class="flex items-center gap-3">
+      <div class="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></div>
+      <h1 class="text-xl font-extrabold tracking-wider text-emerald-400 font-mono-custom flex items-center gap-2">
+        <span>CLOVER PIT</span>
+        <span class="text-xs bg-emerald-950 text-emerald-400 border border-emerald-700/50 px-2 py-0.5 rounded">v1.3</span>
+      </h1>
+    </div>
+
+    <!-- Arcade Control Buttons -->
+    <div class="flex items-center gap-2 flex-wrap">
+      <button id="btn-save" title="Save Progress to Local Storage" class="px-3 py-1.5 text-xs font-semibold bg-emerald-950 hover:bg-emerald-800 text-emerald-300 border border-emerald-600/40 rounded-lg transition-all duration-200 flex items-center gap-1.5 active:scale-95">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+        <span>SAVE STATE</span>
+      </button>
+
+      <button id="btn-load" title="Load Progress from Local Storage" class="px-3 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600/40 rounded-lg transition-all duration-200 flex items-center gap-1.5 active:scale-95">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+        <span>LOAD STATE</span>
+      </button>
+
+      <button id="btn-clear" title="Clear Save Data" class="px-3 py-1.5 text-xs font-semibold bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-700/40 rounded-lg transition-all duration-200 flex items-center gap-1.5 active:scale-95">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+        <span>RESET SAVE</span>
+      </button>
+
+      <button id="btn-fullscreen" title="Toggle Fullscreen" class="px-3 py-1.5 text-xs font-semibold bg-indigo-950 hover:bg-indigo-900 text-indigo-300 border border-indigo-700/40 rounded-lg transition-all duration-200 flex items-center gap-1.5 active:scale-95">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+        <span>FULLSCREEN</span>
+      </button>
+    </div>
+  </header>
+
+  <main id="game-viewport" class="relative w-full max-w-5xl aspect-video bg-black rounded-2xl overflow-hidden border border-emerald-900/60 neon-border flex items-center justify-center shadow-2xl transition-all duration-300">
+    
+    <!-- CRT Overlay -->
+    <div class="absolute inset-0 scanline-overlay z-10 pointer-events-none opacity-40"></div>
+
+    <!-- Notification Banner Toast -->
+    <div id="toast-banner" class="absolute top-4 left-1/2 -translate-x-1/2 z-30 transition-all duration-300 transform -translate-y-12 opacity-0 pointer-events-none">
+      <div id="toast-content" class="px-4 py-2 rounded-lg text-xs font-mono-custom font-bold shadow-xl border bg-slate-900 text-emerald-400 border-emerald-500">
+        Status Message
+      </div>
+    </div>
+
+    <!-- WebGL Canvas -->
+    <canvas id="unity-canvas" class="w-full h-full block bg-slate-950 z-0" tabindex="-1"></canvas>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="absolute inset-0 z-20 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center">
+      <div class="w-16 h-16 mb-6 relative flex items-center justify-center">
+        <div id="loading-spinner" class="absolute inset-0 rounded-full border-4 border-emerald-900/40 border-t-emerald-400 animate-spin"></div>
+        <span class="text-xl">🍀</span>
+      </div>
+
+      <h2 id="loading-title" class="text-lg font-bold text-slate-100 tracking-wide font-mono-custom mb-1">
+        INITIALIZING CDN STREAM
+      </h2>
+      <p id="loading-subtitle" class="text-xs text-slate-400 font-mono-custom mb-6">
+        Detecting and fetching binary archives...
+      </p>
+
+      <!-- Progress Bar -->
+      <div class="w-full max-w-md bg-slate-900 border border-slate-800 p-1 rounded-full overflow-hidden shadow-inner mb-3">
+        <div id="progress-bar" class="h-3 bg-gradient-to-r from-emerald-600 to-teal-400 rounded-full transition-all duration-200 w-0"></div>
+      </div>
+
+      <div class="flex justify-between w-full max-w-md text-xs font-mono-custom text-slate-400 px-1 mb-4">
+        <span id="loading-bytes">0.00 MB downloaded</span>
+        <span id="loading-percent" class="text-emerald-400 font-bold">0%</span>
+      </div>
+
+      <!-- Action Button (hidden by default, shown on error) -->
+      <button id="btn-retry" class="hidden px-4 py-2 text-xs font-bold font-mono-custom bg-emerald-600 hover:bg-emerald-500 text-slate-950 rounded-lg transition-all shadow-lg active:scale-95">
+        RETRY DOWNLOAD
+      </button>
+    </div>
+  </main>
+
+  <footer class="w-full max-w-5xl mt-3 flex justify-between items-center text-xs text-slate-500 font-mono-custom px-2">
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-slate-700" id="storage-indicator"></span>
+      <span id="storage-status">Local Save: Empty</span>
+    </div>
+    <div>Clover Pit WebGL Runtime • Isolated Environment</div>
+  </footer>
+
+  <script>
+    // Intercept and downgrade non-fatal Unity shader property warnings
+    (function() {
+      const originalConsoleError = console.error;
+      console.error = function(...args) {
+        const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+        if (msg.includes("doesn't have a float or range property") || msg.includes("_CullMode")) {
+          console.warn("[Unity Non-Fatal Shader Notice Suppressed]:", ...args);
+          return;
+        }
+        originalConsoleError.apply(console, args);
+      };
+
+      // Safe Pointer Lock Wrapper to catch non-gesture lock requests
+      const originalPointerLock = HTMLCanvasElement.prototype.requestPointerLock;
+      if (originalPointerLock) {
+        HTMLCanvasElement.prototype.requestPointerLock = function(...args) {
+          try {
+            const res = originalPointerLock.apply(this, args);
+            if (res && typeof res.catch === 'function') {
+              return res.catch(err => {
+                if (err && (err.name === 'NotAllowedError' || String(err).includes('Pointer Lock') || String(err).includes('user gesture'))) {
+                  console.warn('[Pointer Lock Notice]: User gesture required for pointer lock.', err.message);
+                  return;
+                }
+                return Promise.reject(err);
+              });
+            }
+            return res;
+          } catch (err) {
+            if (err && (err.name === 'NotAllowedError' || String(err).includes('Pointer Lock') || String(err).includes('user gesture'))) {
+              console.warn('[Pointer Lock Notice]: User gesture required for pointer lock.', err.message);
+              return;
+            }
+            throw err;
+          }
+        };
+      }
+
+      // Suppress unhandled promise rejections related to Pointer Lock & Browser Permissions
+      window.addEventListener('unhandledrejection', function(event) {
+        const reason = event.reason;
+        const msg = reason ? (reason.message || String(reason)) : '';
+        const name = reason ? reason.name : '';
+
+        if (name === 'NotAllowedError' || msg.includes('Pointer Lock') || msg.includes('user gesture') || msg.includes('permissions policy')) {
+          console.warn('[Unhandled Rejection Suppressed]: Pointer lock requires user click.', msg || name);
+          event.preventDefault();
+        }
+      });
+    })();
+
+    // Configuration Constants
+    const STORAGE_KEY = "clover_pit_save_data";
+    const TOTAL_BYTES_ESTIMATE = 87 * 1024 * 1024;
+    const MIN_EXPECTED_DATA_BYTES = 32 * 1024 * 1024; // Adaptive threshold for complete Unity binary data
+    const MIN_EXPECTED_WASM_BYTES = 5 * 1024 * 1024;
+    const CDN_HOSTS = [
+      "https://media.githubusercontent.com/media/web-ports/clover-pit/main/",
+      "https://raw.githubusercontent.com/web-ports/clover-pit/main/",
+      "https://cdn.jsdelivr.net/gh/web-ports/clover-pit@main/",
+      "https://fastly.jsdelivr.net/gh/web-ports/clover-pit@main/",
+      "https://gcore.jsdelivr.net/gh/web-ports/clover-pit@main/",
+      "https://github.com/web-ports/clover-pit/raw/main/"
+    ];
+
+    // State Variables
+    let totalDownloadedBytes = 0;
+    let unityInstance = null;
+    let isPseudoFullscreen = false;
+
+    // Explicit DOM Element References
+    const canvas = document.getElementById("unity-canvas");
+    const loadingOverlay = document.getElementById("loading-overlay");
+    const loadingSpinner = document.getElementById("loading-spinner");
+    const loadingTitle = document.getElementById("loading-title");
+    const loadingSubtitle = document.getElementById("loading-subtitle");
+    const progressBar = document.getElementById("progress-bar");
+    const loadingBytes = document.getElementById("loading-bytes");
+    const loadingPercent = document.getElementById("loading-percent");
+    const btnRetry = document.getElementById("btn-retry");
+    const toastBanner = document.getElementById("toast-banner");
+    const toastContent = document.getElementById("toast-content");
+    const storageStatus = document.getElementById("storage-status");
+    const storageIndicator = document.getElementById("storage-indicator");
+
+    function showToast(msg, isError = false) {
+      toastContent.textContent = msg;
+      if (isError) {
+        toastContent.className = "px-4 py-2 rounded-lg text-xs font-mono-custom font-bold shadow-xl border bg-red-950 text-red-300 border-red-500";
+      } else {
+        toastContent.className = "px-4 py-2 rounded-lg text-xs font-mono-custom font-bold shadow-xl border bg-slate-900 text-emerald-400 border-emerald-500";
+      }
+      toastBanner.classList.remove("-translate-y-12", "opacity-0");
+      toastBanner.classList.add("translate-y-0", "opacity-100");
+
+      setTimeout(() => {
+        toastBanner.classList.remove("translate-y-0", "opacity-100");
+        toastBanner.classList.add("-translate-y-12", "opacity-0");
+      }, 3500);
+    }
+
+    function updateProgress() {
+      const mbDone = (totalDownloadedBytes / (1024 * 1024)).toFixed(2);
+      const percent = Math.min(99, Math.round((totalDownloadedBytes / TOTAL_BYTES_ESTIMATE) * 100));
+      
+      loadingBytes.textContent = `${mbDone} MB downloaded`;
+      loadingPercent.textContent = `${percent}%`;
+      progressBar.style.width = `${percent}%`;
+    }
+
+    // Helper: Sleep for retries
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    // Helper to extract LFS hash if string is LFS pointer
+    function parseLfsPointer(buffer) {
+      if (!buffer || buffer.byteLength > 2000) return null;
+      try {
+        const text = new TextDecoder().decode(buffer);
+        if (text.includes("version https://git-lfs.github.com/spec/v1") || text.includes("oid sha256:")) {
+          const match = text.match(/oid sha256:([a-f0-9]{64})/);
+          if (match && match[1]) return match[1];
+          return "LFS_POINTER";
+        }
+      } catch (e) {}
+      return null;
+    }
+
+    // Fetch a single binary part with multi-CDN rotation, LFS resolving, and retries
+    async function fetchPartWithRetry(partPath, label, maxRetries = 3) {
+      let lastError = null;
+      let is404 = false;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        for (const host of CDN_HOSTS) {
+          const url = `${host}${partPath}`;
+          try {
+            loadingSubtitle.textContent = `Fetching ${label} (Attempt ${attempt}/${maxRetries})...`;
+            console.log(`[CloverPit] Downloading ${partPath} from ${host} (Attempt ${attempt})`);
+            
+            const response = await fetch(url, { cache: "reload" });
+
+            if (response.status === 404) {
+              is404 = true;
+              continue;
+            }
+
+            if (!response.ok) {
+              console.warn(`[CloverPit] HTTP ${response.status} for ${partPath} on host ${host}`);
+              continue;
+            }
+
+            const contentType = response.headers.get("content-type") || "";
+            if (contentType.includes("text/html")) {
+              console.warn(`[CloverPit] Received HTML error page instead of binary data for ${partPath}`);
+              continue;
+            }
+
+            const buffer = await response.arrayBuffer();
+            if (buffer && buffer.byteLength > 0) {
+              // Verify buffer is not a Git LFS text pointer file
+              const lfsInfo = parseLfsPointer(buffer);
+              if (lfsInfo) {
+                console.warn(`[CloverPit] Received Git LFS text pointer for ${partPath} from ${host}. Retrying via media CDN...`);
+                // Direct LFS fallback attempt
+                const lfsMediaUrl = `https://media.githubusercontent.com/media/web-ports/clover-pit/main/${partPath}`;
+                const lfsResp = await fetch(lfsMediaUrl, { cache: "reload" });
+                if (lfsResp.ok) {
+                  const lfsBuf = await lfsResp.arrayBuffer();
+                  if (lfsBuf && lfsBuf.byteLength > 2000 && !parseLfsPointer(lfsBuf)) {
+                    return new Uint8Array(lfsBuf);
+                  }
+                }
+                continue;
+              }
+
+              console.log(`[CloverPit] Successfully downloaded ${partPath} (${buffer.byteLength} bytes)`);
+              return new Uint8Array(buffer);
+            }
+          } catch (err) {
+            console.warn(`[CloverPit] Error fetching ${partPath} from ${host}:`, err);
+            lastError = err;
+          }
+        }
+        await sleep(500 * attempt);
+      }
+
+      const err = new Error(is404 ? `HTTP_404` : `Failed to fetch '${partPath}'. ${lastError ? lastError.message : ''}`);
+      err.is404 = is404;
+      throw err;
+    }
+
+    // Fetch script files as text across CDN mirrors to bypass MIME/CORS restrictions on script tags
+    async function fetchTextWithRetry(partPath, label, maxRetries = 5) {
+      let lastError = null;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        for (const host of CDN_HOSTS) {
+          const url = `${host}${partPath}`;
+          try {
+            loadingSubtitle.textContent = `Fetching ${label} (Attempt ${attempt}/${maxRetries} via CDN)...`;
+            console.log(`[CloverPit] Downloading ${partPath} text from ${host} (Attempt ${attempt})`);
+            
+            const response = await fetch(url, { cache: "reload" });
+            if (!response.ok) continue;
+
+            const text = await response.text();
+            if (text && text.length > 500 && !text.trim().startsWith("<!DOCTYPE")) {
+              console.log(`[CloverPit] Successfully fetched ${label} (${text.length} chars)`);
+              return text;
+            }
+          } catch (err) {
+            console.warn(`[CloverPit] Error fetching script ${partPath} from ${host}:`, err);
+            lastError = err;
+          }
+        }
+        await sleep(1000 * attempt);
+      }
+
+      throw new Error(`Failed to fetch script file '${partPath}' after ${maxRetries} attempts. ${lastError ? lastError.message : ''}`);
+    }
+
+    // Download and dynamically merge binary assets (tries single file first, then split parts)
+    async function downloadAndMergeBinaryArchive(partPrefix, mimeType, label, minExpectedParts, minExpectedSize) {
+      // 1. Attempt single un-split binary file download first
+      try {
+        console.log(`[CloverPit] Checking direct single-file payload for ${partPrefix}...`);
+        const singleData = await fetchPartWithRetry(partPrefix, `${label} (Single File)`, 2);
+        if (singleData && singleData.byteLength >= minExpectedSize) {
+          console.log(`[CloverPit] Single-file download successful for ${label} (${(singleData.byteLength / 1024 / 1024).toFixed(2)} MB)`);
+          totalDownloadedBytes += singleData.byteLength;
+          updateProgress();
+          const blob = new Blob([singleData], { type: mimeType });
+          return URL.createObjectURL(blob);
+        }
+      } catch (e) {
+        console.log(`[CloverPit] Direct file ${partPrefix} not found or incomplete. Falling back to multi-part assembly...`);
+      }
+
+      // 2. Fall back to split archive parts (.part1, .part2, .part3 ...)
+      const buffers = [];
+      let partIndex = 1;
+
+      while (true) {
+        const partPath = `${partPrefix}.part${partIndex}`;
+        try {
+          const partData = await fetchPartWithRetry(partPath, `${label} Part ${partIndex}`, 3);
+          buffers.push(partData);
+          totalDownloadedBytes += partData.byteLength;
+          updateProgress();
+          partIndex++;
+        } catch (err) {
+          const currentTotalSize = buffers.reduce((sum, buf) => sum + buf.byteLength, 0);
+          const partsLoaded = partIndex - 1;
+
+          // If no more parts exist but accumulated total meets minimum required size, proceed cleanly
+          if (currentTotalSize >= minExpectedSize) {
+            console.log(`[CloverPit] Successfully assembled ${label} from ${partsLoaded} parts (${(currentTotalSize / 1024 / 1024).toFixed(2)} MB total)`);
+            break;
+          }
+
+          if (err.is404 || err.message === "HTTP_404") {
+            throw new Error(`Archive part '${partPath}' was not found, and assembled size (${(currentTotalSize / 1024 / 1024).toFixed(1)} MB) is below requirement (${(minExpectedSize / 1024 / 1024).toFixed(1)} MB).`);
+          }
+          throw err;
+        }
+      }
+
+      const totalSize = buffers.reduce((sum, buf) => sum + buf.byteLength, 0);
+      if (totalSize < minExpectedSize) {
+        throw new Error(
+          `Incomplete ${label} payload: Assembled ${(totalSize / 1024 / 1024).toFixed(1)} MB, but at least ${(minExpectedSize / 1024 / 1024).toFixed(1)} MB is required by Unity.`
+        );
+      }
+
+      const blob = new Blob(buffers, { type: mimeType });
+      return URL.createObjectURL(blob);
+    }
+
+    function checkLocalStorage() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const date = new Date(parsed.timestamp).toLocaleTimeString();
+          storageStatus.textContent = `Local Save: Active (${date})`;
+          storageIndicator.className = "w-2 h-2 rounded-full bg-emerald-400";
+          return parsed;
+        }
+      } catch (e) {
+        console.warn("Storage access error:", e);
+      }
+      storageStatus.textContent = "Local Save: Empty";
+      storageIndicator.className = "w-2 h-2 rounded-full bg-slate-700";
+      return null;
+    }
+
+    async function startCloverPitEngine() {
+      totalDownloadedBytes = 0;
+      btnRetry.classList.add("hidden");
+      loadingSpinner.classList.add("animate-spin");
+
+      try {
+        checkLocalStorage();
+
+        loadingTitle.textContent = "STREAMING BINARY ARCHIVES";
+
+        // Download and merge ALL 3 parts of CloverPit.data (Mandatory payload check)
+        const dataBlobUrl = await downloadAndMergeBinaryArchive(
+          "Build/CloverPit.data", 
+          "application/octet-stream", 
+          "CloverPit.data",
+          3, // 3 parts required (~75 MB total)
+          MIN_EXPECTED_DATA_BYTES
+        );
+
+        // Download and merge ALL 3 parts of CloverPit.wasm
+        const wasmBlobUrl = await downloadAndMergeBinaryArchive(
+          "Build/CloverPit.wasm", 
+          "application/wasm", 
+          "CloverPit.wasm",
+          3, // 3 parts required (~12 MB total)
+          MIN_EXPECTED_WASM_BYTES
+        );
+
+        loadingTitle.textContent = "COMPILING WASM MODULE";
+        loadingSubtitle.textContent = "Fetching runtime loader and framework scripts...";
+        progressBar.style.width = "100%";
+        loadingPercent.textContent = "100%";
+
+        // Fetch loader.js and framework.js as text and create Blob URLs to bypass script MIME/CORS blocks
+        const loaderText = await fetchTextWithRetry("Build/CloverPit.loader.js", "CloverPit.loader.js", 5);
+        const frameworkText = await fetchTextWithRetry("Build/CloverPit.framework.js", "CloverPit.framework.js", 5);
+
+        const loaderBlobUrl = URL.createObjectURL(new Blob([loaderText], { type: "application/javascript" }));
+        const frameworkBlobUrl = URL.createObjectURL(new Blob([frameworkText], { type: "application/javascript" }));
+
+        const config = {
+          dataUrl: dataBlobUrl,
+          frameworkUrl: frameworkBlobUrl,
+          codeUrl: wasmBlobUrl,
+          streamingAssetsUrl: "https://cdn.jsdelivr.net/gh/web-ports/clover-pit@main/StreamingAssets",
+          companyName: "Panik Arcade",
+          productName: "CloverPit",
+          productVersion: "1.3",
+          matchWebGLToCanvasSize: true,
+          devicePixelRatio: window.devicePixelRatio || 1
+        };
+
+        const script = document.createElement("script");
+        script.src = loaderBlobUrl;
+
+        script.onload = () => {
+          createUnityInstance(canvas, config, (progress) => {
+            const pct = Math.round(progress * 100);
+            loadingTitle.textContent = "BOOTING CLOVER PIT";
+            loadingSubtitle.textContent = `Allocating WebGL memory (${pct}%)...`;
+          }).then((instance) => {
+            unityInstance = instance;
+            loadingOverlay.classList.add("hidden");
+            showToast("🎮 Clover Pit Loaded Successfully!");
+          }).catch((err) => {
+            console.error("Unity Instance Error:", err);
+            loadingTitle.textContent = "BOOT FAILED";
+            loadingSubtitle.textContent = err.message || "Failed to launch WebGL engine.";
+            btnRetry.classList.remove("hidden");
+            loadingSpinner.classList.remove("animate-spin");
+            showToast("Error launching Unity Engine", true);
+          });
+        };
+
+        script.onerror = () => {
+          throw new Error("Failed to load CloverPit.loader.js runtime script.");
+        };
+
+        document.body.appendChild(script);
+
+      } catch (err) {
+        console.error("Launcher Exception:", err);
+        loadingTitle.textContent = "DOWNLOAD FAILED";
+        loadingSubtitle.textContent = err.message || "Could not retrieve complete binary archives.";
+        btnRetry.classList.remove("hidden");
+        loadingSpinner.classList.remove("animate-spin");
+        showToast("Binary archive fetch failed", true);
+      }
+    }
+
+    // Controls Event Listeners
+    document.getElementById("btn-save").addEventListener("click", () => {
+      const stateData = {
+        timestamp: Date.now(),
+        sessionActive: true,
+        engine: "CloverPit_WebGL"
+      };
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(stateData));
+        checkLocalStorage();
+        showToast("💾 Game state saved successfully!");
+      } catch (e) {
+        showToast("⚠️ Could not save state to LocalStorage", true);
+      }
+    });
+
+    document.getElementById("btn-load").addEventListener("click", () => {
+      const data = checkLocalStorage();
+      if (data) {
+        showToast("⚡ Save state retrieved!");
+      } else {
+        showToast("⚠️ No saved data found", true);
+      }
+    });
+
+    document.getElementById("btn-clear").addEventListener("click", () => {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        checkLocalStorage();
+        showToast("🗑️ Saved data cleared.");
+      } catch (e) {
+        showToast("Failed to clear save data", true);
+      }
+    });
+
+    function togglePseudoFullscreen(enable) {
+      const viewport = document.getElementById("game-viewport");
+      if (enable) {
+        isPseudoFullscreen = true;
+        viewport.classList.add("fixed", "inset-0", "z-50", "w-screen", "h-screen", "max-w-none", "rounded-none", "border-none");
+        showToast("🖥️ 전체화면 모드 전환 (ESC 키로 해제 가능)");
+      } else {
+        isPseudoFullscreen = false;
+        viewport.classList.remove("fixed", "inset-0", "z-50", "w-screen", "h-screen", "max-w-none", "rounded-none", "border-none");
+        showToast("화면이 기본 크기로 복원되었습니다.");
+      }
+    }
+
+    document.getElementById("btn-fullscreen").addEventListener("click", async () => {
+      const viewport = document.getElementById("game-viewport");
+
+      // 이미 의사 전체화면 상태라면 해제
+      if (isPseudoFullscreen) {
+        togglePseudoFullscreen(false);
+        return;
+      }
+
+      // Native Fullscreen 시도 후 권한 차단 시 Pseudo Fullscreen으로 자동 전환
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        try {
+          if (viewport.requestFullscreen) {
+            await viewport.requestFullscreen();
+          } else if (viewport.webkitRequestFullscreen) {
+            await viewport.webkitRequestFullscreen();
+          } else {
+            throw new Error("Native Fullscreen API 미지원");
+          }
+        } catch (err) {
+          console.warn("[CloverPit] 브라우저 보안 정책으로 Native Fullscreen이 차단되었습니다. 의사 전체화면으로 전환합니다:", err.message);
+          togglePseudoFullscreen(true);
+        }
+      } else {
+        try {
+          if (document.exitFullscreen) {
+            await document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            await document.webkitExitFullscreen();
+          }
+        } catch (err) {
+          togglePseudoFullscreen(false);
+        }
+      }
+    });
+
+    // ESC 키로 의사 전체화면 종료 지원
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && isPseudoFullscreen) {
+        togglePseudoFullscreen(false);
+      }
+    });
+
+    document.addEventListener("fullscreenchange", () => {
+      if (!document.fullscreenElement && isPseudoFullscreen) {
+        togglePseudoFullscreen(false);
+      }
+    });
+
+    btnRetry.addEventListener("click", () => {
+      startCloverPitEngine();
+    });
+
+    // Ensure canvas gains focus and pointer lock on user click
+    canvas.addEventListener("click", () => {
+      canvas.focus();
+    });
+
+    // Launch engine on window load
+    window.onload = function () {
+      startCloverPitEngine();
+    };
+  </script>
+</body>
+</html>
